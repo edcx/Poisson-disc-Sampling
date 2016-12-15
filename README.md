@@ -1,9 +1,8 @@
 # Poisson-disc-Sampling
 
-==============
 
 Implementation of the Poisson-disc Sampling algorithm with C# in Unity 3D
 
 Based on paper http://www-devel.cs.ubc.ca/~rbridson/docs/bridson-siggraph07-poissondisk.pdf
 
-![gif](http://i.imgur.com/jf7jbZY.gifv)
+![gif](http://i.imgur.com/OJuRhUa.gif)
