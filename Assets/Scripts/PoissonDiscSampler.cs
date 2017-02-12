@@ -4,20 +4,34 @@ using System.Collections;
 using System.Collections.Generic;
 using Random = UnityEngine.Random;
 
+/// <summary>
+/// Poisson Disc Sampler is implemented based on paper http://www-devel.cs.ubc.ca/~rbridson/docs/bridson-siggraph07-poissondisk.pdf
+/// Few points to mention:
+/// 1. DummyValue is used to identify not assigned points in the space.
+/// 2. By default points bottom left border is (0, 0, 0)
+/// 3. If there are too much points to consider in the space it might take too much time to complete.
+/// 4. Sampler every frame checks rejectionLimit*neighbourPointsCount points. Modify that coroutine if needed. Or just run it on a different thread
+/// </summary>
 public class PoissonDiscSampler : MonoBehaviour
 {
-    public float regionWidth = 10f;
-    public float regionHeight = 10f;
-    public float regionLength = 10f;
-    public float minDistance = 0.5f;
-    public float rejectionLimit = 30;
+    public float regionWidth {get; set;}
+    public float regionHeight {get; set;}
+    public float regionLength {get; set;}
+    public float minDistance {get; set;}
+    public float rejectionLimit {get; set;}
 
+    public bool isSpherical {get; set;}
+    public int TotalPointCount {get; set;}
+    public Action SamplingFinished;
+    public Action<Vector3> NewPointAdded;
+
+
+
+    /// <summary>
+    /// DummyValue is a not assigned point in our grid
+    /// </summary>
+    public static Vector3 DummyValue = Vector3.one * -100;
     private Vector3 center;
-
-    public bool isSpherical;
-
-    public bool drawGizmos;
-
     private float cellSize;
    
     private Vector3[] grid;
@@ -29,29 +43,28 @@ public class PoissonDiscSampler : MonoBehaviour
     private int lens;
 
     private float minDistanceSquared;
-    private int pointCount = 0;
-
-    private Vector3 DummyValue = Vector3.one * -100;
-   
-    public Action SamplingFinished;
-
-    void Start(){
-        StartSampling(3);
-        //StartSampling2D();
-            
-    }
+    
 
     public static float SquaredDistanceTo(Vector3 v1, Vector3 v2){
 		 Vector3 result = v2 - v1;
 		 return result.sqrMagnitude;
 	 }
 
-     public Vector3[] GetPoints(){
-         return grid;
-     }
+    /// <summary>
+    /// Returns the current points
+    /// </summary>
+    /// <returns></returns>
+    public Vector3[] Points
+    {
+        get
+        {
+            return grid;
+        }
+    }
 
     public void StartSampling (int targetDimensions)
 	{
+        TotalPointCount = 0;
         dimensions = targetDimensions;
         if (dimensions == 2)
             regionLength = 0;
@@ -91,11 +104,16 @@ public class PoissonDiscSampler : MonoBehaviour
 
         activeList = new List<Vector3>();
         activeList.Add(point);
-        pointCount++;
+        NewPointAdded(point);
+        TotalPointCount++;
         //Start Step 2
         StartCoroutine(Fill());
 	}
 
+/// <summary>
+/// Every frame checls rejectionLimit*neighbourPointsCount points. 
+/// </summary>
+/// <returns></returns>
     IEnumerator Fill()
     {
         // ---------- Step 2 ----------
@@ -130,16 +148,19 @@ public class PoissonDiscSampler : MonoBehaviour
 
                 bool isOK = true;
 
+                // Check if neighbour points are too close or not
                 for (int x = -1; x < 2; x++)
                 {
                     for (int y = -1; y < 2; y++)
                     {
                         for (int z = -1; z < 2; z++)
                         {
+                            // if indexs are out of bounds try next point
                             if ((col + x) < 0 || (col + x) >= cols || 
                                 (row + y) < 0 || (row + y) >= rows ||
                                 (len + z) < 0 || (len + z) >= lens) continue;
-                            if (grid[(col + x) + (row + y)*cols + (len + z) * cols * lens] == null) continue;
+                            // if there is no point no need to check distance 
+                            if (grid[(col + x) + (row + y)*cols + (len + z) * cols * lens] == DummyValue) continue;
                             
                             Vector3 nPoint = grid[(col + x) + (row + y)*cols + (len + z) * cols * lens];
                             var dSqred = SquaredDistanceTo(nPoint, sample);
@@ -156,11 +177,9 @@ public class PoissonDiscSampler : MonoBehaviour
                    
                     grid[col + row * cols + len * cols * lens] = sample;
                     activeList.Add(sample);
-                    pointCount++;
-                    GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-
-                    go.transform.position = sample;
-                    go.transform.localScale = Vector3.one * minDistance * 0.5f;
+                    TotalPointCount++;
+                   
+                    NewPointAdded(sample);
 
                     //break;
                 }
@@ -169,30 +188,8 @@ public class PoissonDiscSampler : MonoBehaviour
                 activeList.RemoveAt(randomIndex);
         }
         if (SamplingFinished != null)
-            SamplingFinished();
-        Debug.Log ("Point count: " + pointCount);
-        
+            SamplingFinished();     
     }
 
-    void OnDrawGizmos()
-    {
-        if (!Application.isPlaying || !drawGizmos)
-            return;
-        
-        Gizmos.color = Color.green;
-        if (isSpherical)
-        {
-            Gizmos.DrawWireSphere(center, regionWidth / 2f);
-        }
-        else{
-            Gizmos.DrawLine(new Vector3(0,0, 0), new Vector3(0, regionHeight, 0) );
-            Gizmos.DrawLine(new Vector3(0,0, 0), new Vector3(regionWidth, 0, 0) );
-            Gizmos.DrawLine(new Vector3(0,0, 0), new Vector3(0, 0, regionLength) );
-            Gizmos.DrawLine(new Vector3(regionWidth,regionHeight, regionLength), new Vector3(0,regionHeight, regionLength) );
-            Gizmos.DrawLine(new Vector3(regionWidth,regionHeight, regionLength), new Vector3(regionWidth, 0, regionLength) );
-            Gizmos.DrawLine(new Vector3(regionWidth,regionHeight, regionLength), new Vector3(regionWidth,regionHeight, 0) );
-        }
-
-    }
 
 }
